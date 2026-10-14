@@ -6,15 +6,10 @@ import DailyQuestCompletion from '../models/DailyQuestCompletion.js';
 import User from '../models/User.js';
 import { calculateLevel } from '../utils/leveling.js';
 import { checkAchievements } from '../utils/achievementEngine.js';
+import { getAiClient, getAiModel, callAiChat, parseJSONResponse } from '../services/aiService.js';
 
 const router = express.Router();
-
-const getGroq = () => {
-    if (process.env.GROQ_API_KEY) {
-        return new OpenAI({ apiKey: process.env.GROQ_API_KEY, baseURL: 'https://api.groq.com/openai/v1' });
-    }
-    return null;
-};
+const getGroq = getAiClient;
 
 const parseJSON = (text) => {
     const cleaned = text.replace(/```json/g, '').replace(/```/g, '').trim();
@@ -103,8 +98,7 @@ Return ONLY this JSON (no markdown):
   }
 }`;
 
-    const response = await ai.chat.completions.create({
-        model: 'llama-3.3-70b-versatile',
+    const response = await callAiChat(ai, {
         messages: [{ role: 'system', content: prompt }],
         response_format: { type: 'json_object' }
     });
@@ -226,8 +220,7 @@ SCORING RULES:
 Return ONLY JSON: { "score": <0-100>, "feedback": "<2 sentence assessment>" }`;
 
             try {
-                const resp = await ai.chat.completions.create({
-                    model: 'llama-3.3-70b-versatile',
+                const resp = await callAiChat(ai, {
                     messages: [{ role: 'system', content: reviewPrompt }],
                     response_format: { type: 'json_object' }
                 });

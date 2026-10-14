@@ -4,7 +4,7 @@ import JobMatch from '../models/JobMatch.js';
 import ProjectRecommendation from '../models/ProjectRecommendation.js';
 import PracticeTask from '../models/PracticeTask.js';
 import { checkAchievements } from '../utils/achievementEngine.js';
-import { getAiClient, getAiModel, parseJSONResponse } from '../services/aiService.js';
+import { getAiClient, getAiModel, callAiChat, parseJSONResponse } from '../services/aiService.js';
 
 // --- Fallback Templates ---
 const buildMentorFallback = (user, missingSkills = [], recommendedJobsContext = '') => {
@@ -235,20 +235,10 @@ Provide the response in the following JSON format ONLY:
   }
 }`;
 
-        const model = getAiModel();
-        let response;
-        try {
-            response = await ai.chat.completions.create({
-                model: model,
-                messages: [{ role: "system", content: prompt }],
-                response_format: { type: "json_object" }
-            });
-        } catch (jsonError) {
-            response = await ai.chat.completions.create({
-                model: model,
-                messages: [{ role: "system", content: prompt }]
-            });
-        }
+        const response = await callAiChat(ai, {
+            messages: [{ role: "system", content: prompt }],
+            response_format: { type: "json_object" }
+        });
 
         res.json(parseJSONResponse(response.choices[0].message.content));
     } catch (error) {
@@ -289,20 +279,10 @@ Provide your feedback in the following JSON format ONLY:
   "spaceComplexity": "O(1) - explain why"
 }`;
 
-        const model = getAiModel();
-        let response;
-        try {
-            response = await ai.chat.completions.create({
-                model: model,
-                messages: [{ role: "system", content: prompt }],
-                response_format: { type: "json_object" }
-            });
-        } catch (jsonError) {
-            response = await ai.chat.completions.create({
-                model: model,
-                messages: [{ role: "system", content: prompt }]
-            });
-        }
+        const response = await callAiChat(ai, {
+            messages: [{ role: "system", content: prompt }],
+            response_format: { type: "json_object" }
+        });
 
         let reviewData = parseJSONResponse(response.choices[0].message.content);
 
@@ -344,8 +324,7 @@ Description: ${question.description}
 ${previousHints}
 ONE short useful hint (2-3 sentences max). Respond in JSON: { "hint": "..." }`;
 
-        const response = await ai.chat.completions.create({
-            model: getAiModel(),
+        const response = await callAiChat(ai, {
             messages: [{ role: "system", content: prompt }],
             response_format: { type: "json_object" }
         });
@@ -365,7 +344,7 @@ Problem: ${question?.title || 'Unknown'}
 Rules: Guide thinking, explain concepts, be encouraging.`;
 
         const messages = [{ role: "system", content: systemPrompt }, ...history, { role: "user", content: message }];
-        const response = await ai.chat.completions.create({ model: getAiModel(), messages });
+        const response = await callAiChat(ai, { messages });
         res.json({ reply: response.choices[0].message.content.trim() });
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -378,8 +357,7 @@ export const recommendTopic = async (req, res) => {
         if (!ai) return res.status(503).json({ error: "AI API key missing" });
         const { skills, targetJob } = req.body;
         const prompt = `Recommend one DSA topic for a candidate with skills: ${skills.join(', ')} and target job: ${targetJob}. Respond in JSON: { "topic": "...", "reason": "..." }`;
-        const response = await ai.chat.completions.create({
-            model: getAiModel(),
+        const response = await callAiChat(ai, {
             messages: [{ role: "system", content: prompt }],
             response_format: { type: "json_object" }
         });
@@ -394,8 +372,7 @@ export const analyzeSkillGap = async (req, res) => {
         const ai = getAiClient();
         const { targetJob, skills } = req.body;
         const prompt = `Analyze what technical skills are missing to land ${targetJob}. Target Job: ${targetJob}, Current: ${skills.join(', ')}. Respond in JSON: { "verdict": "...", "missingSkills": [{ "skill": "...", "reason": "..." }] }`;
-        const response = await ai.chat.completions.create({
-            model: getAiModel(),
+        const response = await callAiChat(ai, {
             messages: [{ role: "system", content: prompt }],
             response_format: { type: "json_object" }
         });
@@ -423,8 +400,7 @@ Return strict JSON with this schema:
             return res.json(buildStudyGuideFallback(safeTopic));
         }
 
-        const response = await ai.chat.completions.create({
-            model: getAiModel(),
+        const response = await callAiChat(ai, {
             messages: [{ role: "system", content: prompt }],
             response_format: { type: "json_object" }
         });
@@ -449,8 +425,7 @@ export const getMentorAdvice = async (req, res) => {
 
         const prompt = `Generate premium career guidance for ${user.username} targeting ${user.targetJob}. Skills: ${user.skills?.join(', ')}. Missing: ${missingSkills.join(', ')}.
 Respond strictly as JSON with keys: careerAdvice (string), nextSkills (array), projectIdeas (array), portfolioTips (array), linkedinPostIdeas (array).`;
-        const response = await ai.chat.completions.create({
-            model: getAiModel(),
+        const response = await callAiChat(ai, {
             messages: [{ role: "system", content: prompt }],
             response_format: { type: "json_object" }
         });
@@ -481,8 +456,7 @@ export const getMentorProAdvice = async (req, res) => {
 
         const prompt = `Generate elite Career Mentor PRO plan for ${user.username}. Target: ${user.targetJob}. Missing: ${missingSkills.join(', ')}.
 Respond strictly as JSON with keys: careerAdvice (string), nextSkills (array), roadmap (array), projectRecommendations (array), linkedinSuggestions (array).`;
-        const response = await ai.chat.completions.create({
-            model: getAiModel(),
+        const response = await callAiChat(ai, {
             messages: [{ role: "system", content: prompt }],
             response_format: { type: "json_object" }
         });
@@ -508,8 +482,7 @@ export const recommendProjects = async (req, res) => {
         const missingSkills = [...new Set(jobMatches.flatMap(m => m.missingSkills || []))];
 
         const prompt = `Generate 3 project ideas for ${user.targetJob} using ${user.skills.join(', ')} and missing: ${missingSkills.join(', ')}. Respond in JSON.`;
-        const response = await ai.chat.completions.create({
-            model: getAiModel(),
+        const response = await callAiChat(ai, {
             messages: [{ role: "system", content: prompt }],
             response_format: { type: "json_object" }
         });
@@ -527,8 +500,7 @@ export const generatePracticeTask = async (req, res) => {
         const ai = getAiClient();
         const { skill, targetJob } = req.body;
         const prompt = `Generate one practical challenge for skill: ${skill} targeting job: ${targetJob}. Respond in JSON.`;
-        const response = await ai.chat.completions.create({
-            model: getAiModel(),
+        const response = await callAiChat(ai, {
             messages: [{ role: "system", content: prompt }],
             response_format: { type: "json_object" }
         });

@@ -1,31 +1,19 @@
-import OpenAI from 'openai';
+import { getAiClient, getAiModel, callAiChat } from './services/aiService.js';
 import dotenv from 'dotenv';
 dotenv.config();
 
-const ai = new OpenAI({
-    apiKey: process.env.GROQ_API_KEY,
-    baseURL: "https://api.groq.com/openai/v1",
-});
-
 async function test() {
+    const ai = getAiClient();
+    console.log('AI Client configured:', !!ai);
+    console.log('AI Model:', getAiModel());
+
     try {
-        const response = await ai.chat.completions.create({
-            model: 'llama-3.3-70b-versatile',
-            messages: [{ role: 'system', content: 'test' }],
+        const response = await callAiChat(ai, {
+            messages: [{ role: 'system', content: 'Say hello in 3 words' }]
         });
         console.log('PRIMARY OK:', response.choices[0].message.content);
     } catch (err) {
         console.error('PRIMARY FAILED:', err.status, err.message);
-    }
-
-    try {
-        const response = await ai.chat.completions.create({
-            model: 'llama-3.1-8b-instant',
-            messages: [{ role: 'system', content: 'test' }],
-        });
-        console.log('FALLBACK OK:', response.choices[0].message.content);
-    } catch (err) {
-        console.error('FALLBACK FAILED:', err.status, err.message);
     }
 }
 

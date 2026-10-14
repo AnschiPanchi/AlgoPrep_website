@@ -1,73 +1,97 @@
 import React, { useState, useEffect, useContext } from 'react';
 import axios from 'axios';
-import { Sparkles, Map, Lightbulb, Hexagon, Linkedin, Brain, ArrowRight } from 'lucide-react';
+import { Sparkles, Map, Lightbulb, Hexagon, Linkedin, Brain, ArrowRight, RotateCw } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
 import ParticleNetwork from '../components/ParticleNetwork';
 
 const AiMentorPro = () => {
-    const { user } = useContext(AuthContext);
-    const [data, setData] = useState(null);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState(null);
+    const { user, loading: authLoading } = useContext(AuthContext);
+    const userId = user?._id || user?.id;
     const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
 
-    useEffect(() => {
-        let isMounted = true;
-        const fetchInsights = async () => {
-            if (!user?._id) return;
-            if (isMounted) {
-                setLoading(true);
-                setError(null);
-            }
+    const [data, setData] = useState(() => {
+        if (!userId) return null;
+        try {
+            const cached = sessionStorage.getItem(`ai_mentor_pro_${userId}`);
+            return cached ? JSON.parse(cached) : null;
+        } catch {
+            return null;
+        }
+    });
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState(null);
+
+    const fetchInsights = async (force = false) => {
+        if (!userId) return;
+        setLoading(true);
+        setError(null);
+        try {
+            const token = localStorage.getItem('token');
+            const res = await axios.get(`${API_BASE_URL}/api/ai/mentor-pro/${userId}`, {
+                headers: { Authorization: `Bearer ${token}` },
+                timeout: 30000
+            });
+            setData(res.data);
             try {
-                const token = localStorage.getItem('token');
-                const res = await axios.get(`${API_BASE_URL}/api/ai/mentor-pro/${user._id}`, {
-                    headers: { Authorization: `Bearer ${token}` },
-                    timeout: 30000
-                });
-                if (isMounted) {
-                    setData(res.data);
-                }
-            } catch (err) {
-                if (!isMounted) return;
-                const timeoutError = err?.code === 'ECONNABORTED';
-                setError(timeoutError ? "AI Mentor PRO took too long to respond. Please try again." : "Failed to load AI Mentor PRO insights.");
-            } finally {
-                if (isMounted) {
-                    setLoading(false);
-                }
+                sessionStorage.setItem(`ai_mentor_pro_${userId}`, JSON.stringify(res.data));
+            } catch {}
+        } catch (err) {
+            const timeoutError = err?.code === 'ECONNABORTED';
+            setError(timeoutError ? "AI Mentor PRO took too long to respond. Please try again." : (err.response?.data?.error || "Failed to load AI Mentor PRO insights."));
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        if (!userId) return;
+
+        // Check cache first
+        try {
+            const cached = sessionStorage.getItem(`ai_mentor_pro_${userId}`);
+            if (cached && !data) {
+                setData(JSON.parse(cached));
+                return;
             }
-        };
-        fetchInsights();
-        return () => {
-            isMounted = false;
-        };
-    }, [user, API_BASE_URL]);
+        } catch {}
 
-    if (loading) {
-  return (
-    <div className="flex-center" style={{ height: '70vh', flexDirection: 'column', gap: '1rem' }}>
-      <Sparkles className="animate-spin" size={48} color="#ec4899" />
-      <p className="text-muted">Analyzing your career trajectory and generating PRO insights...</p>
-    </div>
-  );
-}
+        if (!data) {
+            fetchInsights();
+        }
+    }, [userId]);
 
-if (error) {
-  return (
-    <div className="container" style={{ paddingTop: '2rem' }}>
-      <p style={{ color: 'var(--danger)' }}>{error}</p>
-    </div>
-  );
-}
+    if (authLoading || loading || (!data && !error && userId)) {
+        return (
+            <div className="flex-center" style={{ height: '70vh', flexDirection: 'column', gap: '1rem' }}>
+                <Sparkles className="animate-spin" size={48} color="#ec4899" />
+                <p className="text-muted">Analyzing your career trajectory and generating PRO insights...</p>
+            </div>
+        );
+    }
 
-if (!data) {
-  return (
-    <div className="container" style={{ paddingTop: '2rem' }}>
-      <p style={{ color: 'var(--text-muted)' }}>No data available.</p>
-    </div>
-  );
-}
+    if (error) {
+        return (
+            <div className="container flex-center" style={{ minHeight: '60vh', flexDirection: 'column', gap: '1.5rem', textAlign: 'center' }}>
+                <div style={{ padding: '1.5rem', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '12px', maxWidth: '500px' }}>
+                    <p style={{ color: 'var(--danger)', margin: '0 0 1rem', fontWeight: 500 }}>{error}</p>
+                    <button className="btn btn-primary" onClick={() => fetchInsights(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <RotateCw size={16} /> Try Again
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
+    if (!data) {
+        return (
+            <div className="container flex-center" style={{ minHeight: '60vh', flexDirection: 'column', gap: '1rem' }}>
+                <p style={{ color: 'var(--text-muted)' }}>No mentor insights available yet.</p>
+                <button className="btn btn-primary" onClick={() => fetchInsights(true)}>
+                    <Sparkles size={18} /> Generate Insights
+                </button>
+            </div>
+        );
+    }
 
     return (
         <>
@@ -79,7 +103,15 @@ if (!data) {
                     <Brain size={40} />
                 </div>
                 <h1 style={{ margin: '0 0 1rem', fontSize: '2.5rem' }}>AI Mentor <span style={{ color: '#ec4899' }}>PRO</span></h1>
-                <p className="text-muted" style={{ maxWidth: '600px', margin: '0 auto', fontSize: '1.1rem' }}>Your unified premium dashboard for career guidance, personalized roadmaps, and actionable growth strategies.</p>
+                <p className="text-muted" style={{ maxWidth: '600px', margin: '0 auto 1.5rem', fontSize: '1.1rem' }}>Your unified premium dashboard for career guidance, personalized roadmaps, and actionable growth strategies.</p>
+                <button 
+                    onClick={() => fetchInsights(true)} 
+                    disabled={loading}
+                    className="btn btn-outline" 
+                    style={{ fontSize: '0.85rem', padding: '0.5rem 1rem', display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}
+                >
+                    <RotateCw size={14} className={loading ? "animate-spin" : ""} /> Refresh Insights
+                </button>
             </div>
 
             {/* Next Skills and Advice Row */}

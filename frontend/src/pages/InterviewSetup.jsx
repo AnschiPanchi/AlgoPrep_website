@@ -86,7 +86,8 @@ const InterviewSetup = () => {
             });
         } catch (error) {
             console.error("Failed to generate question:", error);
-            alert("Failed to contact the AI. Ensure the backend is running and the API key is valid.");
+            const errorMsg = error.response?.data?.error || "Failed to contact the AI. Ensure the backend is running and the API key is valid.";
+            alert(errorMsg);
             setLoading(false);
         }
     };

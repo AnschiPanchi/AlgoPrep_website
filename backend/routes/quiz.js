@@ -7,7 +7,7 @@ import Quest from '../models/Quest.js';
 import QuestCompletion from '../models/QuestCompletion.js';
 import { calculateLevel } from '../utils/leveling.js';
 import { checkAchievements } from '../utils/achievementEngine.js';
-import { getAiClient, getAiModel, parseJSONResponse } from '../services/aiService.js';
+import { getAiClient, getAiModel, callAiChat, parseJSONResponse } from '../services/aiService.js';
 
 const router = express.Router();
 
@@ -138,21 +138,11 @@ Return schema:
   "difficulty_level": ${targetDifficulty}
 }`;
 
-        let aiData;
-        try {
-            const response = await ai.chat.completions.create({
-                model: getAiModel(),
-                messages: [{ role: 'system', content: prompt }],
-                response_format: { type: 'json_object' }
-            });
-            aiData = parseJSONResponse(response.choices[0].message.content);
-        } catch (jsonError) {
-            const response = await ai.chat.completions.create({
-                model: getAiModel(),
-                messages: [{ role: 'system', content: prompt }]
-            });
-            aiData = parseJSONResponse(response.choices[0].message.content);
-        }
+        const response = await callAiChat(ai, {
+            messages: [{ role: 'system', content: prompt }],
+            response_format: { type: 'json_object' }
+        });
+        const aiData = parseJSONResponse(response.choices[0].message.content);
 
         const generatedQuestion = normalizeGeneratedQuestion(aiData, chosenTopic, targetDifficulty);
         const savedQuestion = await Question.create(generatedQuestion);
